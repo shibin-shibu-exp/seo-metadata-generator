@@ -11,6 +11,7 @@ const Sidebar = () => {
   const [seoSummary, setSeoSummary] = useState('');
   const [altTexts, setAltTexts] = useState({});
   const [loading, setLoading] = useState(false);
+  const [enableUpload, setEnableUpload] = useState(true);
 
   const handleGenerate = async () => {
     setLoading(true);
@@ -33,9 +34,11 @@ const Sidebar = () => {
         try {
           const summary = await getSummaryFromDescription(trimmedText);
           setSeoSummary(summary || 'No summary generated');
+          setEnableUpload(false);
         } catch (err) {
           console.error("Error generating summary:", err);
           setSeoSummary("Error generating summary. Check the console.");
+          
         }
       } else {
         setSeoSummary("No text fields found to generate a summary.");
@@ -80,6 +83,10 @@ const Sidebar = () => {
     <>
       <Button onClick={handleGenerate} isDisabled={loading} variant="primary" style={{ marginBottom: '12px' }}>
         {loading ? 'Generating...' : 'Generate SEO Content'}
+      </Button>
+
+      <Button onClick={handleGenerate} isDisabled={enableUpload} variant="primary" style={{ marginBottom: '12px' }}>
+        {loading ? 'Upload SEO Content' : 'Upload SEO Content'}
       </Button>
 
       {seoSummary && (
