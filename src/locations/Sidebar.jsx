@@ -80,7 +80,7 @@ const Sidebar = () => {
   };
 
   return (
-    <>
+    <div style={{ padding: '5px' }}>
       <Button onClick={handleGenerate} isDisabled={loading} variant="primary" style={{ marginBottom: '12px' }}>
         {loading ? 'Generating...' : 'Generate SEO Content'}
       </Button>
@@ -104,7 +104,7 @@ const Sidebar = () => {
           {alt}
         </Note>
       ))}
-    </>
+    </div>
   );
 };
 
