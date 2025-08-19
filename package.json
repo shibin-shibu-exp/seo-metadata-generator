@@ -8,7 +8,7 @@
     "@contentful/f36-tokens": "4.2.0",
     "@contentful/react-apps-toolkit": "1.2.16",
     "@google/genai": "^1.14.0",
-    "contentful-management": "10.46.4",
+    "contentful-management": "^10.46.4",
     "dotenv": "^17.2.1",
     "emotion": "10.0.27",
     "react": "18.3.1",
