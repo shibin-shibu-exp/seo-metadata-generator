@@ -1,18 +1,16 @@
 import React, { useState } from 'react';
-import { Note, Button } from '@contentful/f36-components';
+import { Note, Button, Text } from '@contentful/f36-components';
 import { useSDK } from '@contentful/react-apps-toolkit';
 import getSummaryFromDescription from '../utils/promptFunction';
 
 const Sidebar = () => {
-
   const sdk = useSDK();
-  const fields = sdk.entry.fields;
+  const fields = sdk?.entry?.fields || {};
 
-  const [combinedText, setCombinedText] = useState('');
   const [seoSummary, setSeoSummary] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleGenerateSummary = () => {
+  const handleGenerateSummary = async () => {
     let collected = '';
     Object.keys(fields).forEach((fieldId) => {
       const value = fields[fieldId].getValue();
@@ -20,26 +18,23 @@ const Sidebar = () => {
         collected += value + '\n';
       }
     });
-    const trimmedText = collected.trim();
-    setCombinedText(trimmedText);
 
+    const trimmedText = collected.trim();
     if (!trimmedText) {
-      setSeoSummary('');
+      setSeoSummary('No text fields provided');
       return;
     }
 
     setLoading(true);
-    getSummaryFromDescription(trimmedText)
-      .then((summary) => {
-        setSeoSummary(summary);
-      })
-      .catch((error) => {
-        console.error('Error generating summary:', error);
-        setSeoSummary('');
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+    try {
+      const summary = await getSummaryFromDescription(trimmedText);
+      setSeoSummary(summary || 'No summary generated');
+    } catch (error) {
+      console.error('Error generating summary:', error);
+      setSeoSummary('Error generating summary');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -49,7 +44,9 @@ const Sidebar = () => {
       </Button>
 
       <Note style={{ whiteSpace: 'pre-wrap' }}>
-        <strong>SEO Summary:</strong> {seoSummary || 'No text fields provided'}
+        <Text fontWeight="fontWeightDemiBold">SEO Summary:</Text>
+        <br />
+        {seoSummary}
       </Note>
     </>
   );
