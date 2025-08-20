@@ -77,7 +77,6 @@ const Sidebar = () => {
   const newAltTexts = {};
 
   try {
-    // Collect text fields
     Object.keys(fields).forEach((fieldId) => {
       const value = fields[fieldId].getValue();
       if (typeof value === 'string' && value.trim()) {
@@ -90,7 +89,6 @@ const Sidebar = () => {
       try {
         const rawSummary = await getSummaryFromDescription(trimmedText);
 
-        // 🧹 Clean raw AI output (remove fences, stray text)
         const clean = rawSummary
           .replace(/^```json\s*/i, '')
           .replace(/^```\s*/i, '')
@@ -105,7 +103,6 @@ const Sidebar = () => {
           parsed = { title: "", description: "", tags: [] };
         }
 
-        // Store **stringified JSON** for Accordion parsing
         setSeoSummary(JSON.stringify(parsed));
       } catch (err) {
         console.error("Error generating summary:", err);
@@ -123,7 +120,6 @@ const Sidebar = () => {
       }));
     }
 
-    // 🔹 Generate alt text (same as you had)
     for (const fieldId of Object.keys(fields)) {
       let assets = fields[fieldId].getValue();
       if (!assets) continue;
