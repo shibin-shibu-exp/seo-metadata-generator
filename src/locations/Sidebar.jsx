@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Note, Button, Text } from '@contentful/f36-components';
+import { Note, Button, Text, Spinner } from '@contentful/f36-components';
 import { useSDK } from '@contentful/react-apps-toolkit';
 import getSummaryFromDescription from '../utils/promptFunction';
 import getAltTextFromImage from '../utils/getAltTextFromImage';
@@ -7,19 +7,55 @@ import uploadSeoToContentful from '../utils/uploadSeoToContentful';
 
 const Sidebar = () => {
   const sdk = useSDK();
-  const fields = sdk?.entry?.fields || {};
+  const fields = sdk.entry.fields; 
 
   const [seoSummary, setSeoSummary] = useState('');
   const [altTexts, setAltTexts] = useState({});
-  const [loading, setLoading] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false); 
+  const [isUploading, setIsUploading] = useState(false);   
   const [disableUpload, setDisableUpload] = useState(true);
 
-const handleUpload = async () => {
-  uploadSeoToContentful({seoSummary},sdk?.entry?.fields?.blogTitle.getValue());
-  setDisableUpload(true);
-}
+  const handleSEOUpload = async () => {
+    setIsUploading(true); 
+
+    uploadSeoToContentful({seoSummary},sdk?.entry?.fields?.blogTitle.getValue());
+
+    setDisableUpload(true);
+    setSeoSummary('');
+    setIsUploading(false);
+  };
+
+  const handleALTUpload = async () => {
+    setIsUploading(true);
+
+    try {
+      const altTextEntries = Object.entries(altTexts);
+      
+      for (const [imageFieldId, altTextValue] of altTextEntries) {
+        const targetAltTextFieldId = `${imageFieldId}AltText`;
+
+        if (fields[targetAltTextFieldId]) {
+          await fields[targetAltTextFieldId].setValue(altTextValue);
+        } else {
+          console.warn(`Field "${targetAltTextFieldId}" not found. Skipping.`);
+          sdk.notifier.warning(`Could not find alt text field for "${imageFieldId}".`);
+        }
+      }
+
+      sdk.notifier.success("Content saved successfully!");
+
+    } catch (error) {
+      console.error("Failed to set alt text fields:", error);
+      sdk.notifier.error("Failed to save alt text. See console for details.");
+    }
+
+    setDisableUpload(true);
+    setAltTexts({});
+    setIsUploading(false);
+  };
+
   const handleGenerate = async () => {
-    setLoading(true);
+    setIsGenerating(true); 
     setSeoSummary('');
     setAltTexts({});
 
@@ -43,57 +79,67 @@ const handleUpload = async () => {
         } catch (err) {
           console.error("Error generating summary:", err);
           setSeoSummary("Error generating summary. Check the console.");
-          
         }
       } else {
         setSeoSummary("No text fields found to generate a summary.");
       }
 
       for (const fieldId of Object.keys(fields)) {
-        const asset = fields[fieldId].getValue();
-        if (asset && asset.sys && asset.sys.type === 'Link' && asset.sys.linkType === 'Asset') {
-          const fullAsset = sdk.space.getAsset(asset.sys.id);
-          const resolvedAsset = await fullAsset;
+        let assets = fields[fieldId].getValue();
+        if (!assets) continue;
 
-          const file = resolvedAsset?.fields?.file?.["en-US"];
-          if (file?.contentType?.startsWith("image/")) {
-            const url = file.url.startsWith("https:")
-              ? file.url
-              : "https:" + file.url;
-            
-            const mimeType = file.contentType;
+        if (!Array.isArray(assets)) {
+          assets = [assets];
+        }
 
-            try {
-              const altText = await getAltTextFromImage(url, mimeType);
-              newAltTexts[fieldId] = altText;
-            } catch (err) {
-              console.error("Error generating alt text for", fieldId, err);
-              newAltTexts[fieldId] = "Error generating alt text. Check the console.";
+        const generatedTextsForField = [];
+
+        for (const asset of assets) {
+          if (asset && asset.sys && asset.sys.type === 'Link' && asset.sys.linkType === 'Asset') {
+            const resolvedAsset = await sdk.space.getAsset(asset.sys.id);
+            const file = resolvedAsset?.fields?.file?.["en-US"];
+
+            if (file?.contentType?.startsWith("image/")) {
+              const url = file.url.startsWith("https:") ? file.url : "https:" + file.url;
+              try {
+                const altText = await getAltTextFromImage(url, file.contentType);
+                generatedTextsForField.push(altText);
+              } catch (err) {
+                console.error("Error generating alt text for", fieldId, err);
+                generatedTextsForField.push("Error generating alt text.");
+              }
             }
           }
+        }
+        
+        if (generatedTextsForField.length > 0) {
+            newAltTexts[fieldId] = generatedTextsForField.join('\n\n---\n\n');
         }
       }
 
       setAltTexts(newAltTexts);
-
-    } catch(err) {
+    } catch (err) {
       console.error("An unexpected error occurred in handleGenerate:", err);
-    }
-    finally {
-      setLoading(false);
+    } finally {
+      setIsGenerating(false);
     }
   };
 
-
   return (
-    <>
-      <Button onClick={handleGenerate} isDisabled={loading} variant="primary" style={{ marginBottom: '12px' }}>
-        {loading ? 'Generating...' : 'Generate SEO Content'}
-      </Button>
-
-      <Button onClick={handleUpload} isDisabled={disableUpload} variant="primary" style={{ marginBottom: '12px' }}>
-        {loading ? 'Upload SEO Content' : 'Upload SEO Content'}
-      </Button>
+    <div style={{ padding: '12px', boxSizing: 'border-box' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+        <Button onClick={handleGenerate} isDisabled={isGenerating || isUploading} variant="primary" isFullWidth>
+          {isGenerating ? <Spinner /> : 'Generate'}
+        </Button>
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', maxWidth: '48.5%' }}>
+          <Button onClick={handleSEOUpload} isDisabled={disableUpload || isGenerating || isUploading} variant="positive" isFullWidth>
+            {isUploading ? <Spinner /> : 'Add SEO'}
+          </Button>
+          <Button onClick={handleALTUpload} isDisabled={disableUpload || isGenerating || isUploading} variant="positive" isFullWidth>
+            {isUploading ? <Spinner /> : 'Add ALT'}
+          </Button>
+        </div>
+      </div>
 
       {seoSummary && (
         <Note style={{ whiteSpace: 'pre-wrap', marginBottom: '16px' }}>
@@ -110,7 +156,7 @@ const handleUpload = async () => {
           {alt}
         </Note>
       ))}
-    </>
+    </div>
   );
 };
 
