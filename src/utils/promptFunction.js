@@ -6,7 +6,7 @@ const ai = new GoogleGenAI({
 
 export default async function getSummaryFromDescription(summary) {
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
+    model: import.meta.env.VITE_GEMINI_MODEL,
     contents:
       'Create an SEO-friendly title, meta description, and tags from the following text: "' +
       summary +
