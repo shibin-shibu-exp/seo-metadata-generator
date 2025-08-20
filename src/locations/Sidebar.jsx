@@ -143,7 +143,11 @@ const Sidebar = () => {
           <Flex flexDirection="column" gap="spacingM">
           {(() => {
             try {
+              console.log("Parsed SEO Summary:", seoSummary);
               const seoData = JSON.parse(seoSummary);
+              console.log("Parsed SEO Data:", seoData);
+              
+              
               return (
                 <>
                   <Box>

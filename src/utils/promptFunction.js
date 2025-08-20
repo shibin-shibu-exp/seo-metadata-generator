@@ -10,7 +10,7 @@ export default async function getSummaryFromDescription(summary) {
     contents:
       'Create an SEO-friendly title, meta description, and tags from the following text: "' +
       summary +
-      '".Focus on clarity, keyword optimization, and readability. Return the result in plain text JSON format with "title", "description", and "tags" fields only. Do not include the ```json markdown wrapper.',
+      '".Focus on clarity, keyword optimization, and readability. Return the result in plain text JSON format with "title", "description", and "tags" fields only. Do not include any markdown wrapper.',
   });
 
   return (
