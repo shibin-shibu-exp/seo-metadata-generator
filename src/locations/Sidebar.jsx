@@ -175,21 +175,21 @@ const Sidebar = () => {
                 <>
                   <Box>
                     <Flex justifyContent="space-between" alignItems="center">
-                      <Text fontWeight="fontWeightDemiBold">Title</Text>
+                      <Text fontWeight="fontWeightDemiBold" fontColor="blue900">Title</Text>
                       <CopyButton value={seoData.title} size='small' />
                     </Flex>
                     <Paragraph>{seoData.title}</Paragraph>
                   </Box>
                   <Box>
                     <Flex justifyContent="space-between" alignItems="center">
-                      <Text fontWeight="fontWeightDemiBold">Description</Text>
+                      <Text fontWeight="fontWeightDemiBold" fontColor="blue900">Description</Text>
                       <CopyButton value={seoData.description} size='small' />
                     </Flex>
                     <Paragraph>{seoData.description}</Paragraph>
                   </Box>
                   <Box>
                     <Flex justifyContent="space-between" alignItems="center">
-                      <Text fontWeight="fontWeightDemiBold">Tags</Text>
+                      <Text fontWeight="fontWeightDemiBold" fontColor="blue900">Tags</Text>
                       <CopyButton value={seoData.tags.join(', ')} size='small' />
                     </Flex>
                     <Paragraph>{seoData.tags.join(', ')}</Paragraph>
