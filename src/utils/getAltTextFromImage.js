@@ -31,7 +31,7 @@ export default async function getAltTextFromImage(imageUrl, mimeType) {
     const imagePart = await urlToGenerativePart(imageUrl, mimeType);
 
     const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: import.meta.env.VITE_GEMINI_MODEL,
         contents: [
             {
                 role: "user",
