@@ -3,6 +3,7 @@ import { Note, Button, Text } from '@contentful/f36-components';
 import { useSDK } from '@contentful/react-apps-toolkit';
 import getSummaryFromDescription from '../utils/promptFunction';
 import getAltTextFromImage from '../utils/getAltTextFromImage';
+import uploadSeoToContentful from '../utils/uploadSeoToContentful';
 
 const Sidebar = () => {
   const sdk = useSDK();
@@ -11,8 +12,12 @@ const Sidebar = () => {
   const [seoSummary, setSeoSummary] = useState('');
   const [altTexts, setAltTexts] = useState({});
   const [loading, setLoading] = useState(false);
-  const [enableUpload, setEnableUpload] = useState(true);
+  const [disableUpload, setDisableUpload] = useState(true);
 
+const handleUpload = async () => {
+  uploadSeoToContentful({seoSummary},sdk?.entry?.fields?.blogTitle.getValue());
+  setDisableUpload(true);
+}
   const handleGenerate = async () => {
     setLoading(true);
     setSeoSummary('');
@@ -34,7 +39,7 @@ const Sidebar = () => {
         try {
           const summary = await getSummaryFromDescription(trimmedText);
           setSeoSummary(summary || 'No summary generated');
-          setEnableUpload(false);
+          setDisableUpload(false);
         } catch (err) {
           console.error("Error generating summary:", err);
           setSeoSummary("Error generating summary. Check the console.");
@@ -79,13 +84,14 @@ const Sidebar = () => {
     }
   };
 
+
   return (
     <div style={{ padding: '5px' }}>
       <Button onClick={handleGenerate} isDisabled={loading} variant="primary" style={{ marginBottom: '12px' }}>
         {loading ? 'Generating...' : 'Generate SEO Content'}
       </Button>
 
-      <Button onClick={handleGenerate} isDisabled={enableUpload} variant="primary" style={{ marginBottom: '12px' }}>
+      <Button onClick={handleUpload} isDisabled={disableUpload} variant="primary" style={{ marginBottom: '12px' }}>
         {loading ? 'Upload SEO Content' : 'Upload SEO Content'}
       </Button>
 
