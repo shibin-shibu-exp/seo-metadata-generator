@@ -28,7 +28,7 @@ const Sidebar = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
-  const canUploadSeo = seoSummary.trim() !== '';
+  const canUploadSeo = seoSummary !== '';
   const canUploadAlt = Object.keys(altTexts).length > 0;
 
   const handleSEOUpload = async () => {
@@ -69,68 +69,95 @@ const Sidebar = () => {
   };
 
   const handleGenerate = async () => {
-    setIsGenerating(true);
-    setSeoSummary('');
-    setAltTexts({});
+  setIsGenerating(true);
+  setSeoSummary('');
+  setAltTexts({});
 
-    let collected = '';
-    const newAltTexts = {};
+  let collected = '';
+  const newAltTexts = {};
 
-    try {
-      Object.keys(fields).forEach((fieldId) => {
-        const value = fields[fieldId].getValue();
-        if (typeof value === 'string' && value.trim()) {
-          collected += value + '\n';
-        }
-      });
-
-      const trimmedText = collected.trim();
-      if (trimmedText) {
-        try {
-          const summary = await getSummaryFromDescription(trimmedText);
-          setSeoSummary(summary || 'No summary generated');
-        } catch (err) {
-          console.error("Error generating summary:", err);
-          setSeoSummary("Error generating summary. Check the console.");
-        }
-      } else {
-        setSeoSummary("No text fields found to generate a summary.");
+  try {
+    // Collect text fields
+    Object.keys(fields).forEach((fieldId) => {
+      const value = fields[fieldId].getValue();
+      if (typeof value === 'string' && value.trim()) {
+        collected += value + '\n';
       }
+    });
 
-      for (const fieldId of Object.keys(fields)) {
-        let assets = fields[fieldId].getValue();
-        if (!assets) continue;
-        if (!Array.isArray(assets)) {
-          assets = [assets];
+    const trimmedText = collected.trim();
+    if (trimmedText) {
+      try {
+        const rawSummary = await getSummaryFromDescription(trimmedText);
+
+        // 🧹 Clean raw AI output (remove fences, stray text)
+        const clean = rawSummary
+          .replace(/^```json\s*/i, '')
+          .replace(/^```\s*/i, '')
+          .replace(/\s*```$/i, '')
+          .trim();
+
+        let parsed;
+        try {
+          parsed = JSON.parse(clean);
+        } catch (err) {
+          console.error("Failed to parse summary JSON:", err, rawSummary);
+          parsed = { title: "", description: "", tags: [] };
         }
-        const generatedTextsForField = [];
-        for (const asset of assets) {
-          if (asset?.sys?.type === 'Link' && asset.sys.linkType === 'Asset') {
-            const resolvedAsset = await sdk.space.getAsset(asset.sys.id);
-            const file = resolvedAsset?.fields?.file?.["en-US"];
-            if (file?.contentType?.startsWith("image/")) {
-              const url = file.url.startsWith("https:") ? file.url : "https:" + file.url;
-              try {
-                const altText = await getAltTextFromImage(url, file.contentType);
-                generatedTextsForField.push(altText);
-              } catch (err) {
-                console.error("Error generating alt text for", fieldId, err);
-                generatedTextsForField.push("Error generating alt text.");
-              }
+
+        // Store **stringified JSON** for Accordion parsing
+        setSeoSummary(JSON.stringify(parsed));
+      } catch (err) {
+        console.error("Error generating summary:", err);
+        setSeoSummary(JSON.stringify({
+          title: "",
+          description: "Error generating summary. Check console.",
+          tags: []
+        }));
+      }
+    } else {
+      setSeoSummary(JSON.stringify({
+        title: "",
+        description: "No text fields found to generate a summary.",
+        tags: []
+      }));
+    }
+
+    // 🔹 Generate alt text (same as you had)
+    for (const fieldId of Object.keys(fields)) {
+      let assets = fields[fieldId].getValue();
+      if (!assets) continue;
+      if (!Array.isArray(assets)) assets = [assets];
+
+      const generatedTextsForField = [];
+      for (const asset of assets) {
+        if (asset?.sys?.type === 'Link' && asset.sys.linkType === 'Asset') {
+          const resolvedAsset = await sdk.space.getAsset(asset.sys.id);
+          const file = resolvedAsset?.fields?.file?.["en-US"];
+          if (file?.contentType?.startsWith("image/")) {
+            const url = file.url.startsWith("https:") ? file.url : "https:" + file.url;
+            try {
+              const altText = await getAltTextFromImage(url, file.contentType);
+              generatedTextsForField.push(altText);
+            } catch (err) {
+              console.error("Error generating alt text for", fieldId, err);
+              generatedTextsForField.push("Error generating alt text.");
             }
           }
         }
-        if (generatedTextsForField.length > 0) {
-          newAltTexts[fieldId] = generatedTextsForField.join('\n\n---\n\n');
-        }
       }
-      setAltTexts(newAltTexts);
-    } catch (err) {
-      console.error("An unexpected error occurred in handleGenerate:", err);
-    } finally {
-      setIsGenerating(false);
+      if (generatedTextsForField.length > 0) {
+        newAltTexts[fieldId] = generatedTextsForField.join('\n\n---\n\n');
+      }
     }
-  };
+    setAltTexts(newAltTexts);
+  } catch (err) {
+    console.error("An unexpected error occurred in handleGenerate:", err);
+  } finally {
+    setIsGenerating(false);
+  }
+};
+
 
   return <>
     {canUploadSeo && (
