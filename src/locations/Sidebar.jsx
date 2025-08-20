@@ -1,5 +1,15 @@
-import React, { useState } from 'react';
-import { Note, Button, Text } from '@contentful/f36-components';
+import React, { useEffect, useState } from 'react';
+import {
+  Accordion,
+  Box,
+  Button,
+  Flex,
+  Paragraph,
+  Spinner,
+  Text,
+  CopyButton, 
+  Caption
+} from '@contentful/f36-components';
 import { useSDK } from '@contentful/react-apps-toolkit';
 import getSummaryFromDescription from '../utils/promptFunction';
 import getAltTextFromImage from '../utils/getAltTextFromImage';
@@ -7,111 +17,246 @@ import uploadSeoToContentful from '../utils/uploadSeoToContentful';
 
 const Sidebar = () => {
   const sdk = useSDK();
-  const fields = sdk?.entry?.fields || {};
+  const fields = sdk.entry.fields;
+
+  useEffect(() => {
+    sdk.window.startAutoResizer();
+  }, [sdk]);
 
   const [seoSummary, setSeoSummary] = useState('');
   const [altTexts, setAltTexts] = useState({});
-  const [loading, setLoading] = useState(false);
-  const [disableUpload, setDisableUpload] = useState(true);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
-const handleUpload = async () => {
-  uploadSeoToContentful({seoSummary},sdk?.entry?.fields?.blogTitle.getValue());
-  setDisableUpload(true);
-}
-  const handleGenerate = async () => {
-    setLoading(true);
+  const canUploadSeo = seoSummary !== '';
+  const canUploadAlt = Object.keys(altTexts).length > 0;
+
+  const handleSEOUpload = async () => {
+    setIsUploading(true);
+    
+    await uploadSeoToContentful({ seoSummary }, fields?.blogTitle?.getValue());
+    
     setSeoSummary('');
-    setAltTexts({});
+    sdk.notifier.success("SEO content saved successfully!");
+    setIsUploading(false);
+  };
 
-    let collected = '';
-    const newAltTexts = {};
+  const handleALTUpload = async () => {
+    setIsUploading(true);
 
     try {
-      Object.keys(fields).forEach((fieldId) => {
-        const value = fields[fieldId].getValue();
-        if (typeof value === 'string' && value.trim()) {
-          collected += value + '\n';
+      const altTextEntries = Object.entries(altTexts);
+      
+      for (const [imageFieldId, altTextValue] of altTextEntries) {
+        const targetAltTextFieldId = `${imageFieldId}AltText`;
+        if (fields[targetAltTextFieldId]) {
+          await fields[targetAltTextFieldId].setValue(altTextValue);
+        } else {
+          console.warn(`Field "${targetAltTextFieldId}" not found. Skipping.`);
+          sdk.notifier.warning(`Could not find alt text field for "${imageFieldId}".`);
         }
-      });
-
-      const trimmedText = collected.trim();
-      if (trimmedText) {
-        try {
-          const summary = await getSummaryFromDescription(trimmedText);
-          setSeoSummary(summary || 'No summary generated');
-          setDisableUpload(false);
-        } catch (err) {
-          console.error("Error generating summary:", err);
-          setSeoSummary("Error generating summary. Check the console.");
-          
-        }
-      } else {
-        setSeoSummary("No text fields found to generate a summary.");
       }
 
-      for (const fieldId of Object.keys(fields)) {
-        const asset = fields[fieldId].getValue();
-        if (asset && asset.sys && asset.sys.type === 'Link' && asset.sys.linkType === 'Asset') {
-          const fullAsset = sdk.space.getAsset(asset.sys.id);
-          const resolvedAsset = await fullAsset;
+      sdk.notifier.success("Alt text saved successfully!");
+      setAltTexts({});
 
+    } catch (error) {
+      console.error("Failed to set alt text fields:", error);
+      sdk.notifier.error("Failed to save alt text. See console for details.");
+    }
+    
+    setIsUploading(false);
+  };
+
+  const handleGenerate = async () => {
+  setIsGenerating(true);
+  setSeoSummary('');
+  setAltTexts({});
+
+  let collected = '';
+  const newAltTexts = {};
+
+  try {
+    Object.keys(fields).forEach((fieldId) => {
+      const value = fields[fieldId].getValue();
+      if (typeof value === 'string' && value.trim()) {
+        collected += value + '\n';
+      }
+    });
+
+    const trimmedText = collected.trim();
+    if (trimmedText) {
+      try {
+        const rawSummary = await getSummaryFromDescription(trimmedText);
+
+        const clean = rawSummary
+          .replace(/^```json\s*/i, '')
+          .replace(/^```\s*/i, '')
+          .replace(/\s*```$/i, '')
+          .trim();
+
+        let parsed;
+        try {
+          parsed = JSON.parse(clean);
+        } catch (err) {
+          console.error("Failed to parse summary JSON:", err, rawSummary);
+          parsed = { title: "", description: "", tags: [] };
+        }
+
+        setSeoSummary(JSON.stringify(parsed));
+      } catch (err) {
+        console.error("Error generating summary:", err);
+        setSeoSummary(JSON.stringify({
+          title: "",
+          description: "Error generating summary. Check console.",
+          tags: []
+        }));
+      }
+    } else {
+      setSeoSummary(JSON.stringify({
+        title: "",
+        description: "No text fields found to generate a summary.",
+        tags: []
+      }));
+    }
+
+    for (const fieldId of Object.keys(fields)) {
+      let assets = fields[fieldId].getValue();
+      if (!assets) continue;
+      if (!Array.isArray(assets)) assets = [assets];
+
+      const generatedTextsForField = [];
+      for (const asset of assets) {
+        if (asset?.sys?.type === 'Link' && asset.sys.linkType === 'Asset') {
+          const resolvedAsset = await sdk.space.getAsset(asset.sys.id);
           const file = resolvedAsset?.fields?.file?.["en-US"];
           if (file?.contentType?.startsWith("image/")) {
-            const url = file.url.startsWith("https:")
-              ? file.url
-              : "https:" + file.url;
-            
-            const mimeType = file.contentType;
-
+            const url = file.url.startsWith("https:") ? file.url : "https:" + file.url;
             try {
-              const altText = await getAltTextFromImage(url, mimeType);
-              newAltTexts[fieldId] = altText;
+              const altText = await getAltTextFromImage(url, file.contentType);
+              generatedTextsForField.push(altText);
             } catch (err) {
               console.error("Error generating alt text for", fieldId, err);
-              newAltTexts[fieldId] = "Error generating alt text. Check the console.";
+              generatedTextsForField.push("Error generating alt text.");
             }
           }
         }
       }
-
-      setAltTexts(newAltTexts);
-
-    } catch(err) {
-      console.error("An unexpected error occurred in handleGenerate:", err);
+      if (generatedTextsForField.length > 0) {
+        newAltTexts[fieldId] = generatedTextsForField.join('\n\n---\n\n');
+      }
     }
-    finally {
-      setLoading(false);
-    }
-  };
+    setAltTexts(newAltTexts);
+  } catch (err) {
+    console.error("An unexpected error occurred in handleGenerate:", err);
+  } finally {
+    setIsGenerating(false);
+  }
+};
 
 
-  return (
-    <>
-      <Button onClick={handleGenerate} isDisabled={loading} variant="primary" style={{ marginBottom: '12px' }}>
-        {loading ? 'Generating...' : 'Generate SEO Content'}
-      </Button>
+  return <>
+    {canUploadSeo && (
+      <Accordion>
+        <Accordion.Item title={
+          <Caption fontWeight="fontWeightMedium" fontColor='gray900' fontSize='fontSizeS'>
+            Generated SEO Content
+          </Caption>
+        }>
+          <Flex flexDirection="column" gap="spacingM">
+          {(() => {
+            try {
+              console.log("Parsed SEO Summary:", seoSummary);
+              const seoData = JSON.parse(seoSummary);
+              console.log("Parsed SEO Data:", seoData);
+              
+              
+              return (
+                <>
+                  <Box>
+                    <Flex justifyContent="space-between" alignItems="center">
+                      <Text fontWeight="fontWeightDemiBold">Title</Text>
+                      <CopyButton value={seoData.title} size='small' />
+                    </Flex>
+                    <Paragraph>{seoData.title}</Paragraph>
+                  </Box>
+                  <Box>
+                    <Flex justifyContent="space-between" alignItems="center">
+                      <Text fontWeight="fontWeightDemiBold">Description</Text>
+                      <CopyButton value={seoData.description} size='small' />
+                    </Flex>
+                    <Paragraph>{seoData.description}</Paragraph>
+                  </Box>
+                  <Box>
+                    <Flex justifyContent="space-between" alignItems="center">
+                      <Text fontWeight="fontWeightDemiBold">Tags</Text>
+                      <CopyButton value={seoData.tags.join(', ')} size='small' />
+                    </Flex>
+                    <Paragraph>{seoData.tags.join(', ')}</Paragraph>
+                  </Box>
+                </>
+              );
+            } catch (e) {
+              return <Paragraph>Could not parse SEO data. Raw output: {seoSummary}</Paragraph>;
+            }
+          })()}
+            
+            <Button 
+              onClick={handleSEOUpload} 
+              isDisabled={!canUploadSeo || isGenerating || isUploading} 
+              variant="positive"
+              endIcon={isUploading && canUploadSeo ? <Spinner variant="white" /> : null}
+              isFullWidth
+            >
+              Add SEO to New Entry
+            </Button>
+          </Flex>
+        </Accordion.Item>
+      </Accordion>
+    )}
 
-      <Button onClick={handleUpload} isDisabled={disableUpload} variant="primary" style={{ marginBottom: '12px' }}>
-        {loading ? 'Upload SEO Content' : 'Upload SEO Content'}
-      </Button>
+    {canUploadAlt && (
+        <Accordion style={{ marginTop: '12px' }}>
+        <Accordion.Item title={
+          <Caption fontWeight="fontWeightMedium" fontColor='gray900' fontSize='fontSizeS'>
+            {`Generated Alt Text (${Object.keys(altTexts).length})`}
+          </Caption>
+        }>
+          <Flex flexDirection="column" gap="spacingL">
+            {Object.entries(altTexts).map(([fieldId, alt]) => (
+              <Box key={fieldId}>
+                <Flex justifyContent="space-between" alignItems="center" marginBottom="spacingXs">
+                  <Text fontColor="blue900">For field: <strong>{fieldId}</strong></Text>
+                  <CopyButton value={alt} size='small'/>
+                </Flex>
+                <Paragraph>{alt}</Paragraph>
+              </Box>
+            ))}
+            <Button 
+              onClick={handleALTUpload} 
+              isDisabled={!canUploadAlt || isGenerating || isUploading} 
+              variant="positive"
+              endIcon={isUploading && canUploadAlt ? <Spinner variant="white" /> : null}
+              isFullWidth
+            >
+              Add All Alt Texts to Entry
+            </Button>
+          </Flex>
+        </Accordion.Item>
+      </Accordion>
+    )}
 
-      {seoSummary && (
-        <Note style={{ whiteSpace: 'pre-wrap', marginBottom: '16px' }}>
-          <Text fontWeight="fontWeightDemiBold">SEO Summary & Tags:</Text>
-          <br />
-          {seoSummary}
-        </Note>
-      )}
-
-      {Object.entries(altTexts).map(([fieldId, alt]) => (
-        <Note key={fieldId} style={{ whiteSpace: 'pre-wrap', marginBottom: '12px' }}>
-          <Text fontWeight="fontWeightDemiBold">Alt Text for "{fieldId}":</Text>
-          <br />
-          {alt}
-        </Note>
-      ))}
-    </>
-  );
+    <Button 
+      onClick={handleGenerate} 
+      isDisabled={isGenerating || isUploading} 
+      variant="primary" 
+      isFullWidth
+      endIcon={isGenerating ? <Spinner variant="white" /> : null}
+      style={{ marginTop: '12px' }}
+    >
+      {isGenerating ? 'Generating' : 'Generate Metadata'}
+    </Button>
+  </>;
 };
 
 export default Sidebar;

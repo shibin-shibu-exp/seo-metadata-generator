@@ -2,18 +2,17 @@ import { createClient } from "contentful-management";
 
 export default async function uploadSeoToContentful(summary, blogName) {
   let parsed;
-
   try {
-    const clean = summary.seoSummary
-      .replace(/```json\n?/, "")
-      .replace(/```$/, "");
-    parsed = JSON.parse(clean);
-  } catch (e) {
-    console.error("Failed to parse summary JSON:", e, summary.seoSummary);
+    parsed = JSON.parse(summary.seoSummary);
+  } catch (err) {
+    console.error("Failed to parse seoSummary JSON:", err, summary.seoSummary);
     return;
   }
 
-  console.log(parsed.title);
+  if (!parsed || typeof parsed !== "object") {
+    console.error("Invalid parsed object:", parsed);
+    return;
+  }
 
   const client = createClient({
     accessToken: import.meta.env.VITE_CMA_ACCESS_TOKEN,
@@ -28,15 +27,15 @@ export default async function uploadSeoToContentful(summary, blogName) {
     const entry = await environment.createEntry("harleyDavidsonBlogPostSeo", {
       fields: {
         blogTitle: { "en-US": "SEO: " + blogName },
-        seoTitle: { "en-US": parsed.title },
-        seoSummary: { "en-US": parsed.description },
+        seoTitle: { "en-US": parsed.title || "" },
+        seoSummary: { "en-US": parsed.description || "" },
         seoTags: {
-          "en-US": parsed.tags.join(", "),
+          "en-US": Array.isArray(parsed.tags) ? parsed.tags.join(", ") : "",
         },
       },
     });
 
-    console.log("Created entry with ID:", entry.sys.id);
+    console.log("Created SEO entry with ID:", entry?.sys?.id);
     return entry;
   } catch (error) {
     console.error("Error uploading SEO to Contentful:", error);
