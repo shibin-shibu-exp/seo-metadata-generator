@@ -59,6 +59,6 @@ cma.locale.getMany({}).then((locales) => console.log(locales));
 Visit the [`contentful-management` documentation](https://www.contentful.com/developers/docs/extensibility/app-framework/sdk/#using-the-contentful-management-library)
 to find out more.
 
-## Learn More
+## Learn More.
 
 [Read more](https://www.contentful.com/developers/docs/extensibility/app-framework/create-contentful-app/) and check out the video on how to use the CLI.
